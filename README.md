@@ -13,4 +13,4 @@ Step 2:
   
   e.g.
   
-  ```m365_onedrive_collector.py "XXXX" "XXXX" "XXXX" "user1@example.onmicrosoft.com```
+  ```m365_onedrive_collector.py "XXXX" "XXXX" "XXXX" "user1@example.onmicrosoft.com"```
