@@ -1,3 +1,4 @@
+# This code is written with the help of LLM model and manually modified
 import os
 import requests
 import msal
