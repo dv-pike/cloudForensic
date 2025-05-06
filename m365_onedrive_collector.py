@@ -28,7 +28,7 @@ versionlog=open(f"{LOCAL_DIR}/{TARGET_USER}-file_version.log","w",encoding="utf-
 collectionlog=open(f"{LOCAL_DIR}/{TARGET_USER}-collection.log","w",encoding="utf-8")
 apilog=open(f"{LOCAL_DIR}/{TARGET_USER}-api.log","w",encoding="utf-8")
 #hashfile=open(f"./{TARGET_USER}-onedrive.zip.MD5","w")
-
+access_token=""
 current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 sys.stdout.reconfigure(encoding='utf-8')
@@ -61,7 +61,8 @@ def log_print(*args, **kwargs):
     collectionlog.flush()
 
 #log api call
-def requestsget(url,headers={},stream=False):
+def requestsget(url,stream=False):
+   headers = {"Authorization": f"Bearer {access_token}"}
    apilog.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - GET "+url+"\n")
    response=requests.get(url,headers=headers,stream=stream)
    for i in range(Nretry):
@@ -72,7 +73,9 @@ def requestsget(url,headers={},stream=False):
           except:
             log_print("Failed logging response.text and response.reason")
           log_print(f"Retry getting: {url}")
-          time.sleep(1)  
+          time.sleep(1)
+          get_access_token()
+          headers = {"Authorization": f"Bearer {access_token}"}
           response=requests.get(url,headers=headers,stream=stream)
           continue
       break
@@ -85,14 +88,14 @@ def get_access_token():
     )
     result = app.acquire_token_for_client(scopes=SCOPE)
     if "access_token" in result:
+        access_token=result["access_token"]
         return result["access_token"]
     else:
         raise Exception("Failed to acquire token: " + str(result.get("error_description")))
 
 # Download a file from a URL
-def download_file(url, access_token, local_path):
-    headers = {"Authorization": f"Bearer {access_token}"}
-    response = requestsget(url, headers=headers, stream=True)
+def download_file(url,  local_path):
+    response = requestsget(url, stream=True)
     savesize=0
     if response.status_code == 200:
         log_print(f"Downloading: {local_path}")
@@ -108,11 +111,10 @@ def download_file(url, access_token, local_path):
         log_print(f"Failed to download: {url} to {local_path}, Status Code: {response.status_code}")
 
 # Recursively retrieve files and folders from OneDrive or SharePoint
-def retrieve_folder_contents(access_token, folder_url, local_folder_path, site_id=None):
-    headers = {"Authorization": f"Bearer {access_token}"}
+def retrieve_folder_contents(folder_url, local_folder_path, site_id=None):
 
     while folder_url:
-        response = requestsget(folder_url, headers=headers)
+        response = requestsget(folder_url)
         if response.status_code != 200:
             log_print(f"Error retrieving folder contents: {response.status_code}, {response.text}, {folder_url}")
             break
@@ -137,7 +139,7 @@ def retrieve_folder_contents(access_token, folder_url, local_folder_path, site_i
                 if site_id:
                    subfolder_url = f"{GRAPH_URL}/sites/{site_id}/drive/items/{item_id}/children"
                 versionlog.write(item_local_path+","+json.dumps(item)+"\n")
-                retrieve_folder_contents(access_token, subfolder_url, item_local_path)
+                retrieve_folder_contents(subfolder_url, item_local_path)
 
             elif "file" in item:
                 # Save the current version
@@ -149,11 +151,11 @@ def retrieve_folder_contents(access_token, folder_url, local_folder_path, site_i
                 os.makedirs(current_version_path,exist_ok=True)
                 current_version_path = os.path.join(file_versions_dir, "current" , f"{item_name}")
                 versionlog.write(current_version_path+","+json.dumps(item)+"\n")
-                download_file(file_url, access_token, current_version_path)
+                download_file(file_url, current_version_path)
 
                 # Retrieve and save all versions
                 versions_url = f"{GRAPH_URL}/users/{TARGET_USER}/drive/items/{item_id}/versions"
-                versions_response = requestsget(versions_url, headers=headers)
+                versions_response = requestsget(versions_url)
                 if versions_response.status_code == 200:
                     versions_data = versions_response.json()
                     apilog.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - "+json.dumps(versions_data)+"\n")
@@ -162,7 +164,7 @@ def retrieve_folder_contents(access_token, folder_url, local_folder_path, site_i
                         version_id = version["id"]
                         version_name = f"{item_name}" #_version_{version_id}"
                         version_url = f"{GRAPH_URL}/users/{TARGET_USER}/drive/items/{item_id}/versions/{version_id}"
-                        version_response = requestsget(version_url, headers=headers)
+                        version_response = requestsget(version_url)
                         item2 = version_response.json()
                         apilog.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - "+json.dumps(item2)+"\n")
 
@@ -172,18 +174,18 @@ def retrieve_folder_contents(access_token, folder_url, local_folder_path, site_i
                              os.makedirs(version_local_path,exist_ok=True)
                              version_local_path = os.path.join(file_versions_dir, version_id,version_name)
                              versionlog.write(version_local_path+","+json.dumps(item2)+"\n")
-                             download_file(version_url2, access_token, version_local_path)
+                             download_file(version_url2,  version_local_path)
         # Check for next page
         folder_url = data.get("@odata.nextLink")
 
 # Retrieve and save OneDrive files and folders
-def retrieve_onedrive_files_and_folders(access_token):
+def retrieve_onedrive_files_and_folders():
     onedrive_dir = os.path.join(LOCAL_DIR, "OneDrive")
     os.makedirs(onedrive_dir, exist_ok=True)
 
     # Start with the root folder
     root_folder_url = f"{GRAPH_URL}/users/{TARGET_USER}/drive/root/children"
-    retrieve_folder_contents(access_token, root_folder_url, onedrive_dir)
+    retrieve_folder_contents(root_folder_url, onedrive_dir)
 
 def md5checksum(fname):
 
@@ -202,7 +204,7 @@ def main():
     log_print("Starting OneDrive data collection at", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     log_print("Collecting OneDrive data of", TARGET_USER)
     try:
-        access_token = get_access_token()
+        access_token=get_access_token()
         log_print("Access token retrieved successfully.")
     except Exception as e:
         log_print(f"An error occurred: {e}")
@@ -210,7 +212,7 @@ def main():
     try:
         # Retrieve OneDrive files and folders
         log_print("Retrieving OneDrive files and folders...")
-        retrieve_onedrive_files_and_folders(access_token)
+        retrieve_onedrive_files_and_folders()
     except Exception as e:
         log_print(f"An error occurred: {e}")
         return
