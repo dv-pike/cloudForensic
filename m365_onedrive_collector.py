@@ -11,10 +11,10 @@ import os
 
 # Configuration
 #========
-CLIENT_ID = "XXXXXX"
-CLIENT_SECRET = "XXXXX"
-TENANT_ID = "XXXXXX"
-TARGET_USER = "username@example.onmicrosoft.com"
+CLIENT_ID = sys.argv[1]
+CLIENT_SECRET = sys.argv[2]
+TENANT_ID = sys.argv[3]
+TARGET_USER = sys.argv[4]
 Nretry=30
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 SCOPE = ["https://graph.microsoft.com/.default"]
