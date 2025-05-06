@@ -62,6 +62,7 @@ def log_print(*args, **kwargs):
 
 #log api call
 def requestsget(url,stream=False):
+   global access_token
    headers = {"Authorization": f"Bearer {access_token}"}
    apilog.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - GET "+url+"\n")
    response=requests.get(url,headers=headers,stream=stream)
@@ -83,6 +84,7 @@ def requestsget(url,stream=False):
    return response
 # Authenticate and get access token
 def get_access_token():
+    global access_token
     app = msal.ConfidentialClientApplication(
         CLIENT_ID, authority=AUTHORITY, client_credential=CLIENT_SECRET
     )
