@@ -65,6 +65,7 @@ def requestsget(url,stream=False):
    global access_token
    headers = {"Authorization": f"Bearer {access_token}"}
    apilog.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - GET "+url+"\n")
+   apilog.flush()
    response=requests.get(url,headers=headers,stream=stream)
    for i in range(Nretry):
       if response.status_code!=200: 
@@ -107,6 +108,7 @@ def download_file(url,  local_path):
             for chunk in response.iter_content(chunk_size=8192):
                 savesize+=len(chunk)
                 apilog.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - Downloading "+local_path+" at "+str(savesize)+"\n")
+                apilog.flush() 
                 f.write(chunk)
 
         md5=md5checksum(local_path)
@@ -125,7 +127,8 @@ def retrieve_folder_contents(folder_url, local_folder_path, site_id=None):
 
         data = response.json()
         apilog.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - "+json.dumps(data)+"\n")
-
+        apilog.flush()
+        
         for item in data.get("value", []):
             item_name = item["name"]
             item_id = item["id"]
@@ -163,7 +166,7 @@ def retrieve_folder_contents(folder_url, local_folder_path, site_id=None):
                 if versions_response.status_code == 200:
                     versions_data = versions_response.json()
                     apilog.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - "+json.dumps(versions_data)+"\n")
-
+                    apilog.flush()
                     for version in versions_data.get("value", []):
                         version_id = version["id"]
                         version_name = f"{item_name}" #_version_{version_id}"
@@ -171,7 +174,7 @@ def retrieve_folder_contents(folder_url, local_folder_path, site_id=None):
                         version_response = requestsget(version_url)
                         item2 = version_response.json()
                         apilog.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - "+json.dumps(item2)+"\n")
-
+                        apilog.flush()
                         if "@microsoft.graph.downloadUrl" in item2:   
                              version_url2 = item2["@microsoft.graph.downloadUrl"]
                              version_local_path = os.path.join(file_versions_dir, version_id)
@@ -196,9 +199,8 @@ def md5checksum(fname):
     md5 = hashlib.md5()
 
     # handle content in binary form
-    f = open(fname, "rb")
-
-    while chunk := f.read(4096):
+    with open(fname, "rb") as f:
+      while chunk := f.read(4096):
         md5.update(chunk)
 
     return md5.hexdigest()
