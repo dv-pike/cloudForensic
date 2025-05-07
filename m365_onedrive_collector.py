@@ -16,7 +16,7 @@ CLIENT_ID = sys.argv[1]
 CLIENT_SECRET = sys.argv[2]
 TENANT_ID = sys.argv[3]
 TARGET_USER = sys.argv[4]
-Nretry=30
+Nretry=100000
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 SCOPE = ["https://graph.microsoft.com/.default"]
 GRAPH_URL = "https://graph.microsoft.com/v1.0"
@@ -74,8 +74,10 @@ def requestsget(url,stream=False):
           except:
             log_print("Failed logging response.text and response.reason")
           log_print(f"Retry getting: {url}")
-          time.sleep(1)
+          time.sleep(10)
           get_access_token()
+          log_print(f"Retry times: "+str(i+1))
+          log_print(f"Access Token: {access_token}")
           headers = {"Authorization": f"Bearer {access_token}"}
           response=requests.get(url,headers=headers,stream=stream)
           continue
