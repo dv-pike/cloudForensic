@@ -16,7 +16,8 @@ CLIENT_ID = sys.argv[1]
 CLIENT_SECRET = sys.argv[2]
 TENANT_ID = sys.argv[3]
 TARGET_USER = sys.argv[4]
-Nretry=100000
+Nretry=3
+NUrlretry=10
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 SCOPE = ["https://graph.microsoft.com/.default"]
 GRAPH_URL = "https://graph.microsoft.com/v1.0"
@@ -116,6 +117,25 @@ def download_file(url,  local_path):
     else:
         log_print(f"Failed to download: {url} to {local_path}, Status Code: {response.status_code}")
 
+# Download file from a item_id
+def download_by_item_id(item_id,file_path,versionstr=""):
+   for i in range(NUrlretry):
+     try:
+       url=f"{GRAPH_URL}/users/{TARGET_USER}/drive/items/{item_id}{versionstr}?select=id,@microsoft.graph.downloadUrl"
+       response=requestsget(url)
+       item=response.json()
+       if versionstr!="":
+          versionlog.write(file_path+","+json.dumps(item)+"\n")
+          versionlog.flush()
+       apilog.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - "+json.dumps(item)+"\n")
+       apilog.flush()
+       url=item["@microsoft.graph.downloadUrl"]
+       download_file(url,file_path)
+       break
+     except:
+       log_print("Retry download by id: "+str(i+1))
+       continue
+
 # Recursively retrieve files and folders from OneDrive or SharePoint
 def retrieve_folder_contents(folder_url, local_folder_path, site_id=None):
 
@@ -158,7 +178,7 @@ def retrieve_folder_contents(folder_url, local_folder_path, site_id=None):
                 os.makedirs(current_version_path,exist_ok=True)
                 current_version_path = os.path.join(file_versions_dir, "current" , f"{item_name}")
                 versionlog.write(current_version_path+","+json.dumps(item)+"\n")
-                download_file(file_url, current_version_path)
+                download_by_item_id(item_id, current_version_path)
 
                 # Retrieve and save all versions
                 versions_url = f"{GRAPH_URL}/users/{TARGET_USER}/drive/items/{item_id}/versions"
@@ -171,17 +191,18 @@ def retrieve_folder_contents(folder_url, local_folder_path, site_id=None):
                         version_id = version["id"]
                         version_name = f"{item_name}" #_version_{version_id}"
                         version_url = f"{GRAPH_URL}/users/{TARGET_USER}/drive/items/{item_id}/versions/{version_id}"
-                        version_response = requestsget(version_url)
-                        item2 = version_response.json()
-                        apilog.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - "+json.dumps(item2)+"\n")
-                        apilog.flush()
-                        if "@microsoft.graph.downloadUrl" in item2:   
-                             version_url2 = item2["@microsoft.graph.downloadUrl"]
-                             version_local_path = os.path.join(file_versions_dir, version_id)
-                             os.makedirs(version_local_path,exist_ok=True)
-                             version_local_path = os.path.join(file_versions_dir, version_id,version_name)
-                             versionlog.write(version_local_path+","+json.dumps(item2)+"\n")
-                             download_file(version_url2,  version_local_path)
+                        version_str = f"/versions/{version_id}"
+                        #version_response = requestsget(version_url)
+                        #item2 = version_response.json()
+                        #apilog.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - "+json.dumps(item2)+"\n")
+                        #if "@microsoft.graph.downloadUrl" in item2:   
+                        #     version_url2 = item2["@microsoft.graph.downloadUrl"]
+                        version_local_path = os.path.join(file_versions_dir, version_id)
+                        os.makedirs(version_local_path,exist_ok=True)
+                        version_local_path = os.path.join(file_versions_dir, version_id,version_name)
+                        #versionlog.write(version_local_path+","+json.dumps(item2)+"\n")
+                        #download_file(version_url2,  version_local_path)
+                        download_by_item_id(item_id,version_local_path,version_str)
         # Check for next page
         folder_url = data.get("@odata.nextLink")
 
