@@ -18,6 +18,7 @@ TENANT_ID = sys.argv[3]
 TARGET_USER = sys.argv[4]
 Nretry=3
 NUrlretry=10
+RequestTimeOut=15
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 SCOPE = ["https://graph.microsoft.com/.default"]
 GRAPH_URL = "https://graph.microsoft.com/v1.0"
@@ -67,7 +68,7 @@ def requestsget(url,stream=False):
    headers = {"Authorization": f"Bearer {access_token}"}
    apilog.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - GET "+url+"\n")
    apilog.flush()
-   response=requests.get(url,headers=headers,stream=stream)
+   response=requests.get(url,headers=headers,stream=stream,timeout=RequestTimeOut)
    for i in range(Nretry):
       if response.status_code!=200: 
           log_print(f"Failed to get: {url}, Status Code: {response.status_code}")
