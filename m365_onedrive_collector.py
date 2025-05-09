@@ -9,7 +9,7 @@ import sys
 import time
 import zipfile
 import os
-
+import traceback
 # Configuration
 #========
 CLIENT_ID = sys.argv[1]
@@ -18,7 +18,7 @@ TENANT_ID = sys.argv[3]
 TARGET_USER = sys.argv[4]
 Nretry=3
 NUrlretry=10
-RequestTimeOut=15
+RequestTimeOut=10
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 SCOPE = ["https://graph.microsoft.com/.default"]
 GRAPH_URL = "https://graph.microsoft.com/v1.0"
@@ -68,24 +68,39 @@ def requestsget(url,stream=False):
    headers = {"Authorization": f"Bearer {access_token}"}
    apilog.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - GET "+url+"\n")
    apilog.flush()
-   response=requests.get(url,headers=headers,stream=stream,timeout=RequestTimeOut)
+   failed=False
+   response=None
+   try:
+      response=requests.get(url,headers=headers,stream=stream,timeout=RequestTimeOut)
+   except Exception as e:
+      failed=True
    for i in range(Nretry):
-      if response.status_code!=200: 
-          log_print(f"Failed to get: {url}, Status Code: {response.status_code}")
+      if failed or response.status_code!=200:
+          if failed: 
+            log_print(f"Failed to get: {url}")
+          else:
+            log_print(f"Failed to get: {url}, Status Code: {response.status_code}")
           try:
-            log_print(response.text,response.reason)
+            if not failed:
+               log_print(response.text,response.reason)
           except:
-            log_print("Failed logging response.text and response.reason")
+            if not failed:
+               log_print("Failed logging response.text and response.reason")
           log_print(f"Retry getting: {url}")
-          time.sleep(10)
+          time.sleep(1)
           get_access_token()
           log_print(f"Retry times: "+str(i+1))
           log_print(f"Access Token: {access_token}")
           headers = {"Authorization": f"Bearer {access_token}"}
-          response=requests.get(url,headers=headers,stream=stream)
+          failed=False
+          try:
+             response=requests.get(url,headers=headers,stream=stream,timeout=RequestTimeOut)
+          except Exception as e:
+              failed=True
           continue
       break
-   if response.status_code!=200: raise Exception("api call failed after "+str(Nretry)+" retry")
+   if failed or response.status_code!=200: 
+        raise Exception("api call failed after "+str(Nretry)+" retry")
    return response
 # Authenticate and get access token
 def get_access_token():
@@ -102,9 +117,13 @@ def get_access_token():
 
 # Download a file from a URL
 def download_file(url,  local_path):
-    response = requestsget(url, stream=True)
+    failed=False
+    try:
+      response = requestsget(url, stream=True)
+    except Exception as e:
+      failed=True
     savesize=0
-    if response.status_code == 200:
+    if not failed and response.status_code == 200:
         log_print(f"Downloading: {local_path}")
         with open(local_path, "wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
@@ -116,7 +135,11 @@ def download_file(url,  local_path):
         md5=md5checksum(local_path)
         log_print(f"Downloaded: {local_path} MD5:{md5}")
     else:
-        log_print(f"Failed to download: {url} to {local_path}, Status Code: {response.status_code}")
+        if failed:
+           log_print(f"Failed to download: {url} to {local_path}")
+        else:
+           log_print(f"Failed to download: {url} to {local_path}, Status Code: {response.status_code}")
+        raise Exception("download failed")
 
 # Download file from a item_id
 def download_by_item_id(item_id,file_path,versionstr=""):
@@ -132,15 +155,18 @@ def download_by_item_id(item_id,file_path,versionstr=""):
        apilog.flush()
        url=item["@microsoft.graph.downloadUrl"]
        download_file(url,file_path)
-       break
-     except:
+       return
+     except Exception as e:
        log_print("Retry download by id: "+str(i+1))
        continue
+   raise Exception("download failed after "+str(NUrlretry)+" retry")
+   
 
 # Recursively retrieve files and folders from OneDrive or SharePoint
 def retrieve_folder_contents(folder_url, local_folder_path, site_id=None):
 
     while folder_url:
+        
         response = requestsget(folder_url)
         if response.status_code != 200:
             log_print(f"Error retrieving folder contents: {response.status_code}, {response.text}, {folder_url}")
@@ -236,6 +262,7 @@ def main():
         log_print("Access token retrieved successfully.")
     except Exception as e:
         log_print(f"An error occurred: {e}")
+        traceback.print_exc()
         return
     try:
         # Retrieve OneDrive files and folders
@@ -243,6 +270,7 @@ def main():
         retrieve_onedrive_files_and_folders()
     except Exception as e:
         log_print(f"An error occurred: {e}")
+        traceback.print_exc()
         return
 
 
@@ -251,8 +279,10 @@ def main():
 if __name__ == "__main__":
     main()
     versionlog.close()
-    collectionlog.close()
     apilog.close()
+    log_print("Zipping Data downloaded")
     zip_directory(LOCAL_DIR,f"{TARGET_USER}-onedrive.zip")
+    log_print("Computing MD5")
     open(f"./{TARGET_USER}-onedrive.zip.MD5","w").write(md5checksum(f"{TARGET_USER}-onedrive.zip"))
     print(f"OneDrive data collection completed.")
+    collectionlog.close()
