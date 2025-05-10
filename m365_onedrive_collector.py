@@ -29,7 +29,6 @@ os.makedirs(LOCAL_DIR, exist_ok=True)
 versionlog=open(f"{LOCAL_DIR}/{TARGET_USER}-file_version.log","w",encoding="utf-8")
 collectionlog=open(f"{LOCAL_DIR}/{TARGET_USER}-collection.log","w",encoding="utf-8")
 apilog=open(f"{LOCAL_DIR}/{TARGET_USER}-api.log","w",encoding="utf-8")
-#hashfile=open(f"./{TARGET_USER}-onedrive.zip.MD5","w")
 access_token=""
 current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -219,16 +218,9 @@ def retrieve_folder_contents(folder_url, local_folder_path, site_id=None):
                         version_name = f"{item_name}" #_version_{version_id}"
                         version_url = f"{GRAPH_URL}/users/{TARGET_USER}/drive/items/{item_id}/versions/{version_id}"
                         version_str = f"/versions/{version_id}"
-                        #version_response = requestsget(version_url)
-                        #item2 = version_response.json()
-                        #apilog.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S")+" - "+json.dumps(item2)+"\n")
-                        #if "@microsoft.graph.downloadUrl" in item2:   
-                        #     version_url2 = item2["@microsoft.graph.downloadUrl"]
                         version_local_path = os.path.join(file_versions_dir, version_id)
                         os.makedirs(version_local_path,exist_ok=True)
                         version_local_path = os.path.join(file_versions_dir, version_id,version_name)
-                        #versionlog.write(version_local_path+","+json.dumps(item2)+"\n")
-                        #download_file(version_url2,  version_local_path)
                         download_by_item_id(item_id,version_local_path,version_str)
         # Check for next page
         folder_url = data.get("@odata.nextLink")
